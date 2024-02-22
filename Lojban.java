@@ -224,7 +224,7 @@ public class Lojban {
         private void handleFatci(List<String> arguments) throws IllegalArgumentException {
             // Check for exactly one argument
             if (arguments.size() != 1) {
-                throw new IllegalArgumentException("Predicate 'fatci' requires exactly one argument.");
+                throw new IllegalArgumentException("Statement is not a valid input string");
             }
             // Gets the argument name that will be asserted to true
             String variableName = arguments.get(0);
