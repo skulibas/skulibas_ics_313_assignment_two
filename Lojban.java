@@ -31,17 +31,68 @@ public class Lojban {
      */
     class Statement {
         String predicate;
-        List<String> arguments;
+        List<Token> arguments;
+        Result result;
 
-        public Statement(String predicate, List<String> arguments) {
+        public Statement(String predicate, List<Token> arguments) {
             this.predicate = predicate;
             this.arguments = arguments;
+            this.result = new Result(null, null);
+        }
+
+        /**
+         * Sets the result of the statement
+         * @param result the result to be set
+         */
+        public void setResult(Result result) {
+            this.result = result;
+        }
+
+        /**
+         * Gets the result of the statement
+         * @return the result of the statement
+         */
+        public Result getResult() {
+            return result;
         }
 
         @Override
         public String toString() {
-            return "Predicate: " + predicate + ", Arguments: " + arguments;
+            return "Predicate: " + predicate + ", Arguments: " + arguments + ", Result: " + result;
         }
+    }
+
+    /**
+     * Class structure for the result of the statement
+     */
+    class Result {
+        enum Type { SUCCESS, FAILURE, VARIABLE, BOOLEAN, LIST }
+        private final Type type;
+        private final Object value;
+
+        public Result(Type type, Object value) {
+            this.type = type;
+            this.value = value;
+        }
+
+        /**
+         * Get the type of result it is
+         * @return the type result
+         */
+        public Type getType() {
+            return type;
+        }
+
+        /**
+         * Get the value of the result
+         * @return the value of the result
+         */
+        public Object getValue() {
+            return value;
+        }
+
+        @Override
+        public String toString() { return String.format("Result[type=%s, value=%s]", type, value); }
     }
 
     /**
@@ -96,36 +147,42 @@ public class Lojban {
          * @param arguments current list of arguments of the statement
          * @return true if it is an argument, false otherwise
          */
-        private boolean isVariableFollowingLo(List<String> arguments) {
+        private boolean isVariableFollowingLo(List<Token> arguments) {
             // Check if the last argument is 'lo', indicating the current token should be treated as a variable
-            return !arguments.isEmpty() && "lo".equals(arguments.get(arguments.size() - 1));
+            return !arguments.isEmpty() && "lo".equals(arguments.get(arguments.size() - 1).value);
         }
 
         /**
          * Helper method to add the arguments in the list
          * @param arguments the current list of arguments
          * @param fullArguments the full argument list
-         * @param value the value to be added to the lists
+         * @param token the value to be added to the lists
          * @param swapNextArguments if short word 'se' is encountered
          * @return the updated swapNextArguments variable
          */
-        private Boolean handleArgumentAddition(List<String> arguments, List<String> fullArguments, String value, boolean swapNextArguments) {
+        private Boolean handleArgumentAddition(List<Token> arguments, List<Token> fullArguments, Token token, boolean swapNextArguments) {
             if (swapNextArguments && !arguments.isEmpty()) {
                 // Insert the new argument before the last argument added
-                arguments.add(arguments.size() - 1, value);
+                arguments.add(arguments.size() - 1, token);
                 // Reset after swap
                 swapNextArguments = false;
             } else {
-                arguments.add(value);
+                arguments.add(token);
             }
-            fullArguments.add(value);
+            fullArguments.add(token);
             return swapNextArguments;
         }
 
+        /**
+         * Main method to parse the tokens
+         * @param tokens to be parsed
+         * @return list of statements containing the predicate and arguments of the statements
+         * @throws IllegalArgumentException
+         */
         public List<Statement> parse(List<Token> tokens) throws IllegalArgumentException {
             List<Statement> statements = new ArrayList<>();
-            List<String> arguments = new ArrayList<>();
-            List<String> fullArguments = new ArrayList<>();
+            List<Token> arguments = new ArrayList<>();
+            List<Token> fullArguments = new ArrayList<>();
             String predicate = null;
             boolean swapNextArguments = false;
 
@@ -138,17 +195,22 @@ public class Lojban {
                 throw new IllegalArgumentException("Statement is not a valid input string");
             }
 
+            // Iterate through all the tokens
             for (Token token : tokens) {
                 switch (token.type) {
+                    // If it is an initiator
                     case INITIATOR:
+                        // Check if there is a predicate for the statement
                         if (predicate != null) {
                             // Create a new Statement object, saving the previous parsed statement with its arguments
                             statements.add(new Statement(predicate, new ArrayList<>(arguments)));
                             // Clear arguments for the next statement
                             arguments.clear();
+                        // If no predicate is used in the statement, throw an error
                         } else {
                             throw new IllegalArgumentException("Statement is not a valid input string");
                         }
+                        // Reset the predicate for the next statement
                         predicate = null;
                         break;
                     // If its a SHORT WORD, NUMBER, or NAME add it as an argument for the statement
@@ -158,16 +220,22 @@ public class Lojban {
                             swapNextArguments = true; // Mark to swap the next arguments
                         }
                         // Add to the full argument list
-                        fullArguments.add(token.value);
+                        fullArguments.add(token);
                         break;
                     case NUMBER:
-                        swapNextArguments = handleArgumentAddition(arguments, fullArguments, token.value, swapNextArguments);
+                        // Only add a number argument if its a valid number, i.e. 'lo' does not follow the number
+                        if (!isVariableFollowingLo(fullArguments)) {
+                            // Call the add argument helper method
+                            swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
+                        } else {
+                            throw new IllegalArgumentException("Statement is not a valid input string");
+                        }
                         break;
                     case NAME:
                         // Only add an argument if its a valid name, i.e. 'lo' followed by name
                         if (isVariableFollowingLo(fullArguments)) {
                             // Call the add argument helper method
-                            swapNextArguments = handleArgumentAddition(arguments, fullArguments, token.value, swapNextArguments);
+                            swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
                         } else {
                             throw new IllegalArgumentException("Statement is not a valid input string");
                         }
@@ -176,14 +244,17 @@ public class Lojban {
                         // Check if the predicate succeeds a lo, meaning its an argument predicate
                         if (!isVariableFollowingLo(fullArguments)) {
                             // Ensure only the first valid predicate is set as the main predicate
-                            if (predicate == null) {
+                            // Ensure that there is an argument before the predicate word
+                            if (predicate == null && arguments.size() == 1) {
                                 // Set the predicate value of the statement to this predicate
                                 predicate = token.value;
+                            } else {
+                                throw new IllegalArgumentException("Statement is not a valid input string");
                             }
                         // Add to arguments directly if it follows 'lo'
                         } else {
                             // Call the add argument helper method
-                            swapNextArguments = handleArgumentAddition(arguments, fullArguments, token.value, swapNextArguments);
+                            swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
                         }
                         break;
                     default:
@@ -205,33 +276,200 @@ public class Lojban {
 
     class Analyzer {
 
-        // Database to store
+        // Environment for the language
         private Map<String, Object> environment = new HashMap<>();
+        // Database of defined predicates
+        private Map<String, Object> database = new HashMap<>();
 
-        public void analyze(List<Statement> statements) {
+        /**
+         * Prints the current state of the environment.
+         */
+        public void printEnvironment() {
+            System.out.println("Current Environment:");
+            environment.forEach((key, value) -> System.out.println(key + ": " + value));
+        }
+
+        /**
+         * The main analyzer for the parsed tokens
+         * @param statements the statements to analyze
+         */
+        public Statement analyze(List<Statement> statements) {
+            // Iterate through all the statements
             for (Statement statement : statements) {
                 switch (statement.predicate) {
+                    // If the predicate is "fatci"
                     case "fatci":
-                        handleFatci(statement.arguments);
+                        // Handle it by calling the handleFatci method
+                        handleFatci(statement);
                         break;
-
+                    // If the predicate is "sumji"
+                    case "sumji":
+                        // Handle it by calling the handleFatci method
+                        handleSumji(statement);
+                        break;
                     default:
                         System.out.println("Unknown predicate: " + statement.predicate);
                 }
             }
+            // Return the last statement after analyzing all statements
+            return getLastStatementResult(statements);
         }
 
-        private void handleFatci(List<String> arguments) throws IllegalArgumentException {
-            // Check for exactly one argument
-            if (arguments.size() != 1) {
-                throw new IllegalArgumentException("Statement is not a valid input string");
+
+        /**
+         * Returns the result of the last statement after all have been analyzed.
+         * @param statements the list of statements after analyzing
+         * @return The last Statement object, or null if there are no statements.
+         */
+        public Statement getLastStatementResult(List<Statement> statements) {
+            if (!statements.isEmpty()) {
+                return statements.get(statements.size() - 1);
             }
+            return null; // Return null if there are no statements to analyze
+        }
+
+        /**
+         * Handles statements with predicate 'fatci'
+         * @param statement the statement that is being evaluated
+         * @throws IllegalArgumentException
+         */
+        private void handleFatci(Statement statement) throws IllegalArgumentException {
+            // Check for exactly one argument
+            if (statement.arguments.size() != 1) {
+                throw new IllegalArgumentException("Predicate 'fatci' requires exactly one argument.");
+            }
+
+            // Check if the argument is either a number or name
+            if (statement.arguments.get(0).type != Token.Type.NUMBER && statement.arguments.get(0).type != Token.Type.NAME) {
+                throw new IllegalArgumentException("Predicate 'fatci' does not take that type of argument.");
+            }
+
             // Gets the argument name that will be asserted to true
-            String variableName = arguments.get(0);
+            String variableName = statement.arguments.get(0).value;
             // Assert the argument name to true
             environment.put(variableName, true);
+            // Update the statement's result to reflect successful assertion
+            // Since 'fatci' asserts existence, we mark it as a successful existence assertion
+            statement.setResult(new Result(Result.Type.BOOLEAN, true));
         }
 
+        /**
+         * Handles statements with predicate 'sumji'
+         * @param statement the statement top analyze
+         * @throws IllegalArgumentException
+         */
+        private void handleSumji(Statement statement) throws IllegalArgumentException {
+            // Check for exactly three argument
+            if (statement.arguments.size() != 3) {
+                throw new IllegalArgumentException("Predicate 'sumji' requires exactly three arguments.");
+            }
+
+            // Get the arguments
+            Token firstArg = statement.arguments.get(0);
+            Token secondArg = statement.arguments.get(1);
+            Token thirdArg = statement.arguments.get(2);
+
+            int sumResult;
+            // If the type of the first argument is a number
+            if (firstArg.type == Token.Type.NUMBER) {
+                // Case when the third argument is a name
+                if (secondArg.type == Token.Type.NUMBER && thirdArg.type == Token.Type.NAME) {
+                    // If the program environment contains the third argument
+                    if (environment.containsKey(thirdArg.value)) {
+                        // Call the helper method to evaluate the arguments
+                        performOperation(firstArg, secondArg, thirdArg, statement);
+                    // If its not already in the environment, we can assign this variable to a value
+                    } else {
+                        // Call the helper method to assign the variable
+                        assignVariable(firstArg, thirdArg, secondArg, statement);
+                    }
+                // Case when the second argument is a name
+                } else if (secondArg.type == Token.Type.NAME && thirdArg.type == Token.Type.NUMBER) {
+                    // If the program environment contains the second argument
+                    if (environment.containsKey(secondArg.value)) {
+                        // Call the helper method to evaluate the arguments
+                        performOperation(firstArg, secondArg, thirdArg, statement);
+                        // If its not already in the environment, we can assign this variable to a value
+                    } else {
+                        // Call the helper method to assign the variable
+                        assignVariable(firstArg, secondArg, thirdArg, statement);
+                    }
+                // Case when both the second and third argument is a name
+                } else if (secondArg.type == Token.Type.NAME && thirdArg.type == Token.Type.NAME) {
+
+                }
+            } else {
+                throw new IllegalArgumentException("Wrong argument type for 'sumji.'");
+            }
+        }
+
+        /**
+         * Helper method to evaluate values if a name variable is in the environment
+         * @param firstArg the first argument
+         * @param secondArg the second argument
+         * @param thirdArg the third argument
+         * @param statement the statement being analyzed
+         */
+        private void performOperation(Token firstArg, Token secondArg, Token thirdArg, Statement statement) {
+            // Get the value of the arguments
+            int firstValue = parseArgumentValue(firstArg);
+            int secondArgValue = parseArgumentValue(secondArg);
+            int thirdArgValue = parseArgumentValue(thirdArg);
+            // get sum of two values
+            int sumResult = secondArgValue + thirdArgValue;
+            // Check if the sum matches the first argument
+            if (sumResult == firstValue) {
+                statement.setResult(new Result(Result.Type.BOOLEAN, true));
+            } else {
+                statement.setResult(new Result(Result.Type.BOOLEAN, false));
+            }
+        }
+
+        /**
+         * Helper method to assign values if a name variable is not in the environment
+         * @param firstArg the first argument
+         * @param secondArg the second argument
+         * @param thirdArg the third argument
+         * @param statement the statement being analyzed
+         */
+        private void assignVariable(Token firstArg, Token secondArg, Token thirdArg, Statement statement) {
+            // Get the value of the first and third argument
+            int firstValue = parseArgumentValue(firstArg);
+            int thirdArgValue = parseArgumentValue(thirdArg);
+            // Get value to assign to third argument
+            int sumResult = firstValue - thirdArgValue;
+            // Assign the value to the third argument
+            environment.put(secondArg.value, sumResult);
+            // Update the result for the statement
+            statement.setResult(new Result(Result.Type.BOOLEAN, true));
+        }
+
+        /**
+         * Helper method to get argument values
+         * @param argument the value of the argument to get value of
+         * @return the argument value
+         */
+        private int parseArgumentValue(Token argument) {
+            // If the argument is a number
+            if (argument.type == Token.Type.NUMBER) {
+                // Return a number
+                return Integer.parseInt(argument.value);
+            // If the argument is a name
+            } else if (argument.type == Token.Type.NAME) {
+                // Check the environment if a a value at that name is stored
+                Object value = environment.get(argument.value);
+                // Check if its an integer value
+                if (value instanceof Integer) {
+                    // Return that integer value
+                    return (Integer) value;
+                // otherwise throw an error
+                } else {
+                    throw new IllegalArgumentException("Variable '" + argument.value + "' does not contain a numeric value.");
+                }
+            } else {
+                throw new IllegalArgumentException("Invalid argument type for 'sumji'.");
+            }
+        }
     }
 
     public static void main(String args[]) {
@@ -253,7 +491,12 @@ public class Lojban {
         try {
             List<Token> tokens = lexer.tokenize(input);
             List<Statement> statements = parser.parse(tokens);
-            analyzer.analyze(statements);
+            System.out.println(statements.toString());
+            Statement lastStatement = analyzer.analyze(statements);
+            // Print the last statement result
+            System.out.println("Last statement result: " + lastStatement);
+            // Now print the environment to see the keys and their values
+            analyzer.printEnvironment();
         } catch (IllegalArgumentException e) {
             System.err.println(e.getMessage());
         }
