@@ -1,4 +1,6 @@
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 
 /**
@@ -7,14 +9,16 @@ import java.util.Scanner;
 public class Lojban {
 
     public static void main(String args[]) {
+        // Create the predicate database
+        Map<String, List<List<Object>>> predicateDatabase = new HashMap<>();
         // Create new instance of Lojban
         Lojban lojban = new Lojban();
         // Create an instance of Lexer to tokenize input
         Lexer lexer = new Lexer();
         // Create an instance of Parser to parse the tokenized input
-        Parser parser = new Parser();
+        Parser parser = new Parser(predicateDatabase);
         // Create an instance of Analyzer to analyze the parsed input
-        Analyzer analyzer = new Analyzer();
+        Analyzer analyzer = new Analyzer(predicateDatabase);
         // Create a new scanner object
         Scanner scanner = new Scanner(System.in);
 

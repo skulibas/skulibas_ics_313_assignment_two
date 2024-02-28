@@ -31,7 +31,7 @@ class Lexer {
                 // If the string is a number, error checking for cases where number has leading 0's
             else if (part.matches("^0$|^[1-9]\\d*$")) tokens.add(new Token(Token.Type.NUMBER, part));
                 // If the string is a name, i.e. having periods at start and end
-            else if (part.matches("\\.[a-z]+\\.")) tokens.add(new Token(Token.Type.NAME, part));
+            else if (part.matches("\\.[a-z\\d]+\\.")) tokens.add(new Token(Token.Type.NAME, part));
                 // If it is a predicate. Case for CVCCV and CCVCV
             else if (part.matches("([bcdfghjklmnpqrstvwxyz][aeiou][bcdfghjklmnpqrstvwxyz]{2}[aeiou])|([bcdfghjklmnpqrstvwxyz]{2}[aeiou][bcdfghjklmnpqrstvwxyz][aeiou])")) tokens.add(new Token(Token.Type.PREDICATE, part));
                 // Throw an error if a string does not match a token type

@@ -11,8 +11,11 @@ class Analyzer {
     // Environment for the language
     private Map<Object, Object> environment = new HashMap<>();
     // Database of defined predicates
-    private Map<String, List<List<Object>>> database = new HashMap<>();
+    private Map<String, List<List<Object>>> database;
 
+    public Analyzer(Map<String, List<List<Object>>> database) {
+        this.database = database;
+    }
     /**
      * The main analyzer for the parsed tokens
      *

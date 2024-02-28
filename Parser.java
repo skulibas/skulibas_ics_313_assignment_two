@@ -1,10 +1,16 @@
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Class to parse the token list produced by the lexer
  */
 class Parser {
+    private Map<String, List<List<Object>>> database;
+
+    public Parser(Map<String, List<List<Object>>> database) {
+        this.database = database;
+    }
 
     /**
      * Main method to parse the tokens
@@ -20,7 +26,7 @@ class Parser {
         String predicate = null;
         boolean swapNextArguments = false;
         List<Object> stekoList = new ArrayList<>();
-        boolean stekoListExists = false;
+        List<Object> cmavoPredicateList = new ArrayList<>();
 
         // Checks to see if the first token is an initiator
         if (!tokens.isEmpty() && tokens.get(0).type == Token.Type.INITIATOR) {
@@ -72,7 +78,6 @@ class Parser {
                         if (!fullArguments.isEmpty() && "steko".equals(fullArguments.get(fullArguments.size() - 1).value)) {
                             stekoList.add(token.value);
                             fullArguments.add(token);
-                            stekoListExists = true;
                         } else {
                             // Call the add argument helper method
                             swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
@@ -84,14 +89,18 @@ class Parser {
                 case NAME:
                     // Only add an argument if its a valid name, i.e. 'lo' followed by name
                     if (isVariableFollowingLo(fullArguments)) {
-                        if (!fullArguments.isEmpty() && "steko".equals(fullArguments.get(fullArguments.size() - 1).value)) {
+                        Token previousToken = getPreviousToken(fullArguments);
+                        if (previousToken != null && "steko".equals(previousToken.value)) {
                             stekoList.add(token.value);
                             fullArguments.add(token);
-                            stekoListExists = true;
                         } else {
                             // Call the add argument helper method
                             swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
                         }
+                    } else if (database.containsKey(token.value)) {
+                        // add the last token added into a new list, the arguments list for this statement
+                        // Create a new statement, assigning this value as the predicate
+                        // Assign the argument to this statements argument
                     } else {
                         throw new IllegalArgumentException("Name parse error");
                     }
@@ -118,7 +127,6 @@ class Parser {
                             List<Object> copiedList = new ArrayList<>(stekoList);
                             arguments.add(new Token(Token.Type.LIST, copiedList));
                             stekoList.clear();
-                            stekoListExists = false;
                         }
                         fullArguments.add(token);
                     }
@@ -145,6 +153,12 @@ class Parser {
         }
         // Return the list of statements
         return statements;
+    }
+
+    // Utility method to safely get the previous token from fullArguments
+    private Token getPreviousToken(List<Token> fullArguments) {
+        if (fullArguments.size() < 2) return null; // or some default token indicating no previous
+        return fullArguments.get(fullArguments.size() - 2);
     }
 
     /**
