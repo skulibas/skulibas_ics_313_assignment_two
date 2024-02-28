@@ -488,11 +488,19 @@ class Analyzer {
             throw new IllegalArgumentException("Predicate 'steko' requires the first argument to be a name.");
         }
 
-        Object head = getArgumentValue(statement.arguments.get(1));
+        Object head = environment.containsKey(statement.arguments.get(1).value)
+                ? getArgumentValue(statement.arguments.get(1))
+                : statement.arguments.get(1).value;
+
         List<Object> list = new ArrayList<>();
 
         // Add head to the list
-        list.add(head);
+        if (head instanceof List) {
+            list.addAll((List<?>) head);
+        } else {
+            list.add(head);
+        }
+
 
         // If there is a third argument, process it as the tail of the list
         if (statement.arguments.size() == 3) {

@@ -1,3 +1,4 @@
+import javax.swing.plaf.nimbus.State;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +27,6 @@ class Parser {
         String predicate = null;
         boolean swapNextArguments = false;
         List<Object> stekoList = new ArrayList<>();
-        List<Object> cmavoPredicateList = new ArrayList<>();
 
         // Checks to see if the first token is an initiator
         if (!tokens.isEmpty() && tokens.get(0).type == Token.Type.INITIATOR) {
@@ -47,6 +47,10 @@ class Parser {
                         if (!stekoList.isEmpty()) {
                             stekoList.clear();
                             throw new IllegalArgumentException("List parsing error");
+                        }
+
+                        if ("steko".equals(predicate) && !"steni".equals(fullArguments.get(fullArguments.size() - 1).value)) {
+                            throw new IllegalArgumentException("Predicate steko needs to end in 'lo steni'");
                         }
 
                         if ("steko".equals(fullArguments.get(fullArguments.size() - 1).value)) {
@@ -97,12 +101,8 @@ class Parser {
                             // Call the add argument helper method
                             swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
                         }
-                    } else if (database.containsKey(token.value)) {
-                        // add the last token added into a new list, the arguments list for this statement
-                        // Create a new statement, assigning this value as the predicate
-                        // Assign the argument to this statements argument
                     } else {
-                        throw new IllegalArgumentException("Name parse error");
+                        throw new IllegalArgumentException(String.format("Name parse error on %s", token.value));
                     }
                     break;
                 case PREDICATE:
@@ -142,6 +142,11 @@ class Parser {
             if (!stekoList.isEmpty()) {
                 stekoList.clear();
                 throw new IllegalArgumentException("List parsing error");
+            }
+
+            if ("steko".equals(predicate) && !"steni".equals(fullArguments.get(fullArguments.size() - 1).value)) {
+                System.out.println(fullArguments);
+                throw new IllegalArgumentException("Predicate steko needs to end in 'lo steni'");
             }
 
             if ("steko".equals(fullArguments.get(fullArguments.size() - 1).value)) {
