@@ -1,7 +1,5 @@
-import javax.swing.plaf.nimbus.State;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+
 
 /**
  * Class to parse the token list produced by the lexer
@@ -26,7 +24,7 @@ class Parser {
         List<Token> fullArguments = new ArrayList<>();
         String predicate = null;
         boolean swapNextArguments = false;
-        List<Object> stekoList = new ArrayList<>();
+        Deque<List<Object>> stack = new ArrayDeque<>();
 
         // Checks to see if the first token is an initiator
         if (!tokens.isEmpty() && tokens.get(0).type == Token.Type.INITIATOR) {
@@ -44,18 +42,6 @@ class Parser {
                 case INITIATOR:
                     // Check if there is a predicate for the statement
                     if (predicate != null) {
-                        if (!stekoList.isEmpty()) {
-                            stekoList.clear();
-                            throw new IllegalArgumentException("List parsing error");
-                        }
-
-                        if ("steko".equals(predicate) && !"steni".equals(fullArguments.get(fullArguments.size() - 1).value)) {
-                            throw new IllegalArgumentException("Predicate steko needs to end in 'lo steni'");
-                        }
-
-                        if ("steko".equals(fullArguments.get(fullArguments.size() - 1).value)) {
-                            throw new IllegalArgumentException("Invalid use of steko");
-                        }
                         // Create a new Statement object, saving the previous parsed statement with its arguments
                         statements.add(new Statement(predicate, new ArrayList<>(arguments)));
                         // Clear arguments for the next statement
@@ -79,13 +65,7 @@ class Parser {
                 case NUMBER:
                     // Only add a number argument if its a valid number, i.e. 'lo' does not follow the number
                     if (!isVariableFollowingLo(fullArguments)) {
-                        if (!fullArguments.isEmpty() && "steko".equals(fullArguments.get(fullArguments.size() - 1).value)) {
-                            stekoList.add(token.value);
-                            fullArguments.add(token);
-                        } else {
-                            // Call the add argument helper method
-                            swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
-                        }
+                        swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
                     } else {
                         throw new IllegalArgumentException("Number parse error");
                     }
@@ -93,14 +73,7 @@ class Parser {
                 case NAME:
                     // Only add an argument if its a valid name, i.e. 'lo' followed by name
                     if (isVariableFollowingLo(fullArguments)) {
-                        Token previousToken = getPreviousToken(fullArguments);
-                        if (previousToken != null && "steko".equals(previousToken.value)) {
-                            stekoList.add(token.value);
-                            fullArguments.add(token);
-                        } else {
-                            // Call the add argument helper method
-                            swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
-                        }
+                        swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
                     } else {
                         throw new IllegalArgumentException(String.format("Name parse error on %s", token.value));
                     }
@@ -121,12 +94,12 @@ class Parser {
                         if (!"steko".equals(token.value) && !"steni".equals(token.value)) {
                             // Call the add argument helper method
                             swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
-                        }
+                        } else {
+                            if ("steko".equals(token.value)) {
+                                stack.push(new ArrayList<>());
+                            } else {
 
-                        if ("steni".equals(token.value)) {
-                            List<Object> copiedList = new ArrayList<>(stekoList);
-                            arguments.add(new Token(Token.Type.LIST, copiedList));
-                            stekoList.clear();
+                            }
                         }
                         fullArguments.add(token);
                     }
@@ -139,19 +112,6 @@ class Parser {
 
         // Handle the last statement
         if (predicate != null) {
-            if (!stekoList.isEmpty()) {
-                stekoList.clear();
-                throw new IllegalArgumentException("List parsing error");
-            }
-
-            if ("steko".equals(predicate) && !"steni".equals(fullArguments.get(fullArguments.size() - 1).value)) {
-                System.out.println(fullArguments);
-                throw new IllegalArgumentException("Predicate steko needs to end in 'lo steni'");
-            }
-
-            if ("steko".equals(fullArguments.get(fullArguments.size() - 1).value)) {
-                throw new IllegalArgumentException("Invalid use of steko");
-            }
             statements.add(new Statement(predicate, new ArrayList<>(arguments)));
         } else {
             throw new IllegalArgumentException("Predicate is not found");
