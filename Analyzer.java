@@ -49,6 +49,10 @@ class Analyzer {
                 case "steko":
                     handleSteko(statement);
                     break;
+                // If the predicate is "cmavo"
+                case "cmavo":
+                    handleCmavo(statement);
+                    break;
                 default:
                     System.out.println("Unknown predicate: " + statement.predicate);
             }
@@ -72,16 +76,10 @@ class Analyzer {
         Token argument = statement.arguments.get(0);
 
         // Checks for valid input
-        if (argument.type != Token.Type.NUMBER && argument.type != Token.Type.NAME && !"steni".equals(argument.value)) {
+        if (argument.type != Token.Type.NUMBER && argument.type != Token.Type.NAME && argument.type != Token.Type.LIST) {
             throw new IllegalArgumentException("Predicate 'fatci' does not take that type of argument.");
         }
-
-        // Handling "lo steni" as a special case
-        if ("steni".equals(argument.value)) {
-            environment.put(argument.value, new ArrayList<>());
-        } else {
-            environment.put(argument.value, null);
-        }
+        environment.put(argument.value, null);
 
         // Update the statement's result to reflect successful assertion
         statement.setResult(new Result(true));
@@ -432,12 +430,17 @@ class Analyzer {
         Object arg1Value = getArgumentValue(statement.arguments.get(0));
         Object arg2Value = getArgumentValue(statement.arguments.get(1));
 
+        List<Object> arg1List = new ArrayList<>();
+        List<Object> arg2List = new ArrayList<>();
+
         // Compare the two values based on their types
         boolean result;
         if (arg1Value instanceof Integer && arg2Value instanceof Integer) {
             result = arg1Value.equals(arg2Value);
         } else if (arg1Value instanceof List<?> && arg2Value instanceof List<?>) {
-            result = arg1Value.equals(arg2Value);
+            addAllNestedLists(arg1List, arg1Value);
+            addAllNestedLists(arg2List, arg2Value);
+            result = arg1List.equals(arg2List);
         } else {
             // If the types are incompatible, set result to false
             result = false;
@@ -496,7 +499,7 @@ class Analyzer {
 
         // Add head to the list
         if (head instanceof List) {
-            list.addAll((List<?>) head);
+            addAllNestedLists(list, head);
         } else {
             list.add(head);
         }
@@ -506,10 +509,7 @@ class Analyzer {
         if (statement.arguments.size() == 3) {
             Token thirdArgument = statement.arguments.get(2);
             if (thirdArgument.value instanceof List) {
-                List<?> tailList = (List<?>) thirdArgument.value;
-                if (!tailList.isEmpty()) {
-                    list.addAll(tailList);
-                }
+                addAllNestedLists(list, thirdArgument.value);
             } else {
                 throw new IllegalArgumentException("Predicate 'steko' requires the third argument to be a list.");
             }
@@ -521,6 +521,71 @@ class Analyzer {
         // Set the statement result
         statement.setResult(new Result(list));
     }
+
+    /**
+     * Handles statements with predicate 'cmavo'
+     *
+     * @param statement the statement top analyze
+     * @throws IllegalArgumentException
+     */
+    private void handleCmavo(Statement statement) throws IllegalArgumentException {
+        // cmavo requires at least two arguments: the predicate name and at least one argument for the predicate
+        // Or three arguments: The predicate name, at least one argument for the predicate, lists of predicates
+        if (statement.arguments.size() < 2 || 3 > statement.arguments.size()) {
+            throw new IllegalArgumentException("Predicate 'cmavo' requires at least two arguments or no more than three.");
+        }
+
+        // The first argument is the predicate name. It should be a name or predicate word.
+        Token arg1 = statement.arguments.get(0);
+        if (arg1.type != Token.Type.NAME && arg1.type != Token.Type.PREDICATE) {
+            throw new IllegalArgumentException(String.format("%s must be a valid name or valid predicate", arg1.value));
+        }
+
+        // The second argument is associated with the arg1. It should be a name or list of names
+        Token arg2 = statement.arguments.get(1);
+        if (arg2.type != Token.Type.NAME && arg2.type != Token.Type.LIST) {
+            throw new IllegalArgumentException(String.format("%s must be a valid name or valid lists of name", arg2.value));
+        }
+
+        List<Object> listOfArgs = new ArrayList<>();
+        List<String> listOfNames = new ArrayList<>();
+        if (arg2 instanceof List<?>) {
+            for (Object element : (List<?>) arg2) {
+                if (element instanceof Token) {
+                    if (((Token) element).type == Token.Type.NAME) {
+                        listOfNames.add((String) ((Token) element).value);
+                    } else {
+                        throw new IllegalArgumentException(String.format("%s is not a valid name or valid lists of name", ((Token) element).type));
+                    }
+                }
+            }
+
+
+        } else {
+
+        }
+    }
+
+    /**
+     * Recursive helper method to add elements of nested lists
+     * @param targetList list where you want to add all items.
+     * @param element current item to be processed
+     */
+    private void addAllNestedLists(List<Object> targetList, Object element) {
+        if (element instanceof List) {
+            // Recursively process each element within the list
+            for (Object nestedElement : (List<?>) element) {
+                addAllNestedLists(targetList, nestedElement);
+            }
+        } else if (element instanceof Token) {
+            // Add only the value of the Token to the target list
+            targetList.add(((Token) element).value);
+        } else {
+            // Directly add the element if it's not a list or a Token
+            targetList.add(element);
+        }
+    }
+
 
 
     /**

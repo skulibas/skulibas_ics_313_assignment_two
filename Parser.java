@@ -42,6 +42,9 @@ class Parser {
                 case INITIATOR:
                     // Check if there is a predicate for the statement
                     if (predicate != null) {
+                        if (!stack.isEmpty()) {
+                            throw new IllegalArgumentException("A list needs to end with 'lo steni'");
+                        }
                         // Create a new Statement object, saving the previous parsed statement with its arguments
                         statements.add(new Statement(predicate, new ArrayList<>(arguments)));
                         // Clear arguments for the next statement
@@ -65,7 +68,12 @@ class Parser {
                 case NUMBER:
                     // Only add a number argument if its a valid number, i.e. 'lo' does not follow the number
                     if (!isVariableFollowingLo(fullArguments)) {
-                        swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
+                        if(!stack.isEmpty()) {
+                            stack.peek().add(token);
+                            fullArguments.add(token);
+                        } else {
+                            swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
+                        }
                     } else {
                         throw new IllegalArgumentException("Number parse error");
                     }
@@ -73,9 +81,20 @@ class Parser {
                 case NAME:
                     // Only add an argument if its a valid name, i.e. 'lo' followed by name
                     if (isVariableFollowingLo(fullArguments)) {
-                        swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
+                        if(!stack.isEmpty()) {
+                            stack.peek().add(token);
+                            fullArguments.add(token);
+                        } else {
+                            swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
+                        }
                     } else {
-                        throw new IllegalArgumentException(String.format("Name parse error on %s", token.value));
+                        if(!stack.isEmpty()) {
+                            token.type = Token.Type.PREDICATE;
+                            stack.peek().add(token);
+                            fullArguments.add(token);
+                        } else {
+                            throw new IllegalArgumentException(String.format("Name parse error on name %s", token.value));
+                        }
                     }
                     break;
                 case PREDICATE:
@@ -98,7 +117,15 @@ class Parser {
                             if ("steko".equals(token.value)) {
                                 stack.push(new ArrayList<>());
                             } else {
-
+                                List<Object> finalList = new ArrayList<>();
+                                while (!stack.isEmpty()) {
+                                    // Pop the element from the stack, which will be a list itself
+                                    finalList.add(0, stack.pop());  // Add it to the beginning of the final list
+                                }
+                                List<Object> copyOfFinalList = new ArrayList<>(finalList);
+                                Token listToken = new Token(Token.Type.LIST, copyOfFinalList);
+                                arguments.add(listToken);
+                                finalList.clear();
                             }
                         }
                         fullArguments.add(token);
@@ -112,6 +139,10 @@ class Parser {
 
         // Handle the last statement
         if (predicate != null) {
+
+            if (!stack.isEmpty()) {
+                throw new IllegalArgumentException("A list needs to end with 'lo steni'");
+            }
             statements.add(new Statement(predicate, new ArrayList<>(arguments)));
         } else {
             throw new IllegalArgumentException("Predicate is not found");
