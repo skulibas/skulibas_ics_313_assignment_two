@@ -40,10 +40,15 @@ public class Lojban {
                     Statement lastStatement = analyzer.analyze(statements);
 
                     // Output the analysis of the current line
+                    System.out.println("-----------------------------------------------------------------------------------------");
                     System.out.println("Processed statement: " + lastStatement);
+                    System.out.println("-----------------------------------------------------------------------------------------");
                     System.out.println("Result: " + lastStatement.result);
+                    System.out.println("-----------------------------------------------------------------------------------------");
                     analyzer.printEnvironment();
+                    System.out.println("-----------------------------------------------------------------------------------------");
                     analyzer.printDatabase();
+                    System.out.println("-----------------------------------------------------------------------------------------");
                 } catch (IllegalArgumentException e) {
                     System.err.println("Error: " + e.getMessage());
                 }
