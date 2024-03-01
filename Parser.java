@@ -5,9 +5,9 @@ import java.util.*;
  * Class to parse the token list produced by the lexer
  */
 class Parser {
-    private Map<String, List<List<Object>>> database;
+    HashMap<String, HashMap<List<Token>, Predicate>> database;
 
-    public Parser(Map<String, List<List<Object>>> database) {
+    public Parser(HashMap<String, HashMap<List<Token>, Predicate>> database) {
         this.database = database;
     }
 
@@ -88,10 +88,12 @@ class Parser {
                             swapNextArguments = handleArgumentAddition(arguments, fullArguments, token, swapNextArguments);
                         }
                     } else {
-                        if(!stack.isEmpty()) {
+                        if (!stack.isEmpty() && !fullArguments.isEmpty() && !"steko".equals(fullArguments.get(fullArguments.size() - 1).value)) {
                             token.type = Token.Type.PREDICATE;
                             stack.peek().add(token);
                             fullArguments.add(token);
+                        } else if (database.containsKey((String) token.value)) {
+                            predicate = (String) token.value;
                         } else {
                             throw new IllegalArgumentException(String.format("Name parse error on name %s", token.value));
                         }

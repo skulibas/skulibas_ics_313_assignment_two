@@ -2,6 +2,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Analyzes the statements
@@ -11,9 +12,9 @@ class Analyzer {
     // Environment for the language
     private Map<Object, Object> environment = new HashMap<>();
     // Database of defined predicates
-    private Map<String, List<List<Object>>> database;
+    HashMap<String, HashMap<List<Token>, Predicate>> database;
 
-    public Analyzer(Map<String, List<List<Object>>> database) {
+    public Analyzer(HashMap<String, HashMap<List<Token>, Predicate>> database) {
         this.database = database;
     }
     /**
@@ -54,11 +55,51 @@ class Analyzer {
                     handleCmavo(statement);
                     break;
                 default:
-                    System.out.println("Unknown predicate: " + statement.predicate);
+                    handleDatabase(statement);
             }
         }
         // Return the last statement after analyzing all statements
         return getLastStatementResult(statements);
+    }
+
+    /**
+     * Handles statements with custom predicates
+     *
+     * @param statement the statement that is being evaluated
+     * @throws IllegalArgumentException
+     */
+    private void handleDatabase(Statement statement) {
+        if (!database.containsKey(statement.predicate)) {
+            throw new IllegalArgumentException(String.format("%s is not a predicate", statement.predicate));
+        }
+
+        HashMap<List<Token>, Predicate> argumentMap = database.get(statement.predicate);
+        if (argumentMap.containsKey(statement.arguments)) {
+            Predicate predicate = argumentMap.get(statement.arguments);
+            if (!predicate.evaluations.isEmpty()) {
+                analyze(predicate.evaluations);
+                boolean allTrue = true;
+                for (Statement evaluated : predicate.evaluations) {
+                    if (evaluated.result == null || !evaluated.result.isTrue()) {
+                        allTrue = false;
+                        break;
+                    }
+                }
+                statement.setResult(new Result(allTrue));
+            } else {
+                statement.setResult(new Result(true));
+            }
+        } else {
+            Token resultToken = findMatchingArgument(statement);
+            // Assuming resultToken.value is a List, not a simple value.
+            if (resultToken.value instanceof List && !((List<?>) resultToken.value).isEmpty()) {
+                // If placeholders were found, set result as true.
+                statement.setResult(new Result(resultToken.value));
+            } else {
+                // No placeholders or matches found.
+                statement.setResult(new Result(false));
+            }
+        }
     }
 
     /**
@@ -76,10 +117,12 @@ class Analyzer {
         Token argument = statement.arguments.get(0);
 
         // Checks for valid input
-        if (argument.type != Token.Type.NUMBER && argument.type != Token.Type.NAME && argument.type != Token.Type.LIST) {
-            throw new IllegalArgumentException("Predicate 'fatci' does not take that type of argument.");
+        if (argument.type == Token.Type.NAME || argument.type == Token.Type.PREDICATE) {
+            Predicate predicate = new Predicate((String) argument.value);
+            HashMap<List<Token>, Predicate> innerMap = new HashMap<>();
+            innerMap.put(statement.arguments, predicate);
+            database.put((String) argument.value, innerMap);
         }
-        environment.put(argument.value, null);
 
         // Update the statement's result to reflect successful assertion
         statement.setResult(new Result(true));
@@ -426,29 +469,63 @@ class Analyzer {
             throw new IllegalArgumentException("Predicate 'dunli' requires exactly two arguments.");
         }
 
-        // Retrieve argument values, handling both direct numbers and names
-        Object arg1Value = getArgumentValue(statement.arguments.get(0));
-        Object arg2Value = getArgumentValue(statement.arguments.get(1));
+        // Retrieve and process both arguments
+        Token arg1 = statement.arguments.get(0);
+        Token arg2 = statement.arguments.get(1);
+
+        Object arg1Value = getArgumentValue(arg1);
+        Object arg2Value = getArgumentValue(arg2);
+
+        // Initialize a variable to hold the result message or boolean value
+        Object result;
 
         List<Object> arg1List = new ArrayList<>();
         List<Object> arg2List = new ArrayList<>();
 
-        // Compare the two values based on their types
-        boolean result;
-        if (arg1Value instanceof Integer && arg2Value instanceof Integer) {
+        // Determine if an assignment is needed and perform comparisons
+        if (arg1.type == Token.Type.NAME && !environment.containsKey(arg1.value)) {
+            if (arg2Value instanceof String || arg2Value instanceof Integer) {
+                // Assign arg2's value to arg1 in the environment
+                environment.put(arg1.value, arg2Value);
+                result = String.format("Value '%s' has been assigned to '%s'.", arg2Value, arg1.value);
+            } else if (arg2Value instanceof List<?>) {
+                addAllNestedLists(arg2List, arg2Value);
+                // Assign arg2's value to arg1 in the environment
+                environment.put(arg1.value, arg2List);
+                result = String.format("List '%s' has been assigned to '%s'.", arg2List, arg1.value);
+            } else {
+                result = String.format("'%s' is not a valid value to be assigned to '%s'.", arg2Value, arg1.value);
+            }
+        } else if (arg2.type == Token.Type.NAME && !environment.containsKey(arg2.value)) {
+            if (arg1Value instanceof String || arg1Value instanceof Integer) {
+                // Assign arg2's value to arg1 in the environment
+                environment.put(arg2.value, arg1Value);
+                result = String.format("Value '%s' has been assigned to '%s'.", arg1Value, arg2.value);
+            } else if (arg1Value instanceof List<?>) {
+                addAllNestedLists(arg1List, arg1Value);
+                // Assign arg2's value to arg1 in the environment
+                environment.put(arg2.value, arg1List);
+                result = String.format("List '%s' has been assigned to '%s'.", arg1List, arg2.value);
+            } else {
+                result = String.format("'%s' is not a valid value to be assigned to '%s'.", arg1Value, arg2.value);
+            }
+        } else if ((arg1Value instanceof Integer && arg2Value instanceof Integer) || (arg1Value instanceof String && arg2Value instanceof String)) {
+            // Direct comparison for integers, strings, or lists
             result = arg1Value.equals(arg2Value);
-        } else if (arg1Value instanceof List<?> && arg2Value instanceof List<?>) {
+        } else if ((arg1Value instanceof List && arg2Value instanceof List)) {
             addAllNestedLists(arg1List, arg1Value);
             addAllNestedLists(arg2List, arg2Value);
             result = arg1List.equals(arg2List);
         } else {
-            // If the types are incompatible, set result to false
+            // Incompatible types or undefined variables result in false
             result = false;
         }
 
-        // Set the result of the statement
+        // Set the result of the statement based on the outcome
         statement.setResult(new Result(result));
     }
+
+
 
     /**
      * Handles statements with predicate 'steni'
@@ -529,10 +606,9 @@ class Analyzer {
      * @throws IllegalArgumentException
      */
     private void handleCmavo(Statement statement) throws IllegalArgumentException {
-        // cmavo requires at least two arguments: the predicate name and at least one argument for the predicate
-        // Or three arguments: The predicate name, at least one argument for the predicate, lists of predicates
-        if (statement.arguments.size() < 2 || 3 > statement.arguments.size()) {
-            throw new IllegalArgumentException("Predicate 'cmavo' requires at least two arguments or no more than three.");
+        // Check that cmavo has exactly two or three arguments.
+        if (statement.arguments.size() < 2 || statement.arguments.size() > 3) {
+            throw new IllegalArgumentException("Predicate 'cmavo' requires exactly two or three arguments.");
         }
 
         // The first argument is the predicate name. It should be a name or predicate word.
@@ -547,23 +623,91 @@ class Analyzer {
             throw new IllegalArgumentException(String.format("%s must be a valid name or valid lists of name", arg2.value));
         }
 
-        List<Object> listOfArgs = new ArrayList<>();
-        List<String> listOfNames = new ArrayList<>();
-        if (arg2 instanceof List<?>) {
-            for (Object element : (List<?>) arg2) {
-                if (element instanceof Token) {
-                    if (((Token) element).type == Token.Type.NAME) {
-                        listOfNames.add((String) ((Token) element).value);
-                    } else {
-                        throw new IllegalArgumentException(String.format("%s is not a valid name or valid lists of name", ((Token) element).type));
+        Predicate predicate = new Predicate((String) arg1.value);
+
+        List<Token> listOfArgs = new ArrayList<>();
+        Object arg2Value = getArgumentValue(arg2);
+        if (arg2Value instanceof List<?> outerList) {
+            // Check if the inner list is empty and throw an error if it is
+            if (outerList.isEmpty()) {
+                throw new IllegalArgumentException("Found an empty list of arguments within cmavo predicate definition");
+            }
+            for (Object innerListObj : outerList) {
+                // Check if each element in the outer list is also a list
+                if (innerListObj instanceof List<?> innerList) {
+                    // Check if the inner list is empty and throw an error if it is
+                    if (innerList.isEmpty()) {
+                        throw new IllegalArgumentException("Found an empty list of arguments within cmavo predicate definition");
                     }
+                    // Iterate over the inner list of Tokens
+                    for (Object tokenObj : innerList) {
+                        if (tokenObj instanceof Token token) {
+                            if (token.type == Token.Type.NAME) {
+                                listOfArgs.add(token);
+                            } else {
+                                throw new IllegalArgumentException(String.format("%s is not a valid name in the list of names", token.value));
+                            }
+                        } else {
+                            throw new IllegalArgumentException("Inner list contains an element that is not a Token");
+                        }
+                    }
+                } else {
+                    throw new IllegalArgumentException("Outer list contains an element that is not a list");
                 }
             }
-
-
         } else {
-
+            listOfArgs.add((Token) arg2Value);
         }
+
+        predicate.setArguments(listOfArgs);
+
+         if (statement.arguments.size() == 3) {
+             Token arg3 = statement.arguments.get(2);
+             if (arg3.type != Token.Type.PREDICATE && arg3.type != Token.Type.LIST) {
+                 throw new IllegalArgumentException(String.format("%s must be a valid predicate or valid lists of predicate", arg2.value));
+             }
+
+             if (arg3.type == Token.Type.LIST) {
+                 // Assuming arg3.value is a List<Token> where each Token is a sublist
+                 @SuppressWarnings("unchecked")
+                 List<List<Token>> listOfLists = (List<List<Token>>) arg3.value; // Cast to the correct type
+                 List<Statement> statements = new ArrayList<>();
+                 List<Token> arguments = new ArrayList<>();
+                 String predicateForStatement = null;
+                 for (List<Token> sublist : listOfLists) {
+                     for (int i = 0; i < sublist.size(); i++) {
+                         if (sublist.get(i).type == Token.Type.PREDICATE) {
+                             predicateForStatement = (String) sublist.get(i).value;
+                         } else if (sublist.get(i).type == Token.Type.NAME) {
+                             arguments.add(sublist.get(i));
+                         } else {
+                             throw new IllegalArgumentException(String.format("%s must be a valid name", sublist.get(i)));
+                         }
+                     }
+
+                     if (predicateForStatement != null) {
+                         statements.add(new Statement(predicateForStatement, new ArrayList<>(arguments)));
+                         arguments.clear();
+                     } else {
+                         throw new IllegalArgumentException("Predicate is not found");
+                     }
+                 }
+                 predicate.setEvaluations(statements);
+             } else {
+                 Statement newStatement = new Statement((String) arg3.value, new ArrayList<>());
+                 List<Statement> statements = new ArrayList<>();
+                 statements.add(newStatement);
+                 predicate.setEvaluations(statements);
+             }
+         }
+
+        HashMap<List<Token>, Predicate> innerMap = database.get(arg1.value);
+        if (innerMap == null) {
+            innerMap = new HashMap<>();
+            database.put((String) arg1.value, innerMap);
+        }
+        innerMap.put(listOfArgs, predicate);
+        database.put((String) arg1.value, innerMap);
     }
 
     /**
@@ -586,8 +730,6 @@ class Analyzer {
         }
     }
 
-
-
     /**
      * Returns the result of the last statement after all have been analyzed.
      *
@@ -607,6 +749,18 @@ class Analyzer {
     public void printEnvironment() {
         System.out.println("Current Environment:");
         environment.forEach((key, value) -> System.out.println(key + ": " + value));
+    }
+
+    /**
+     * Prints the current state of the datatbase.
+     */
+    public void printDatabase() {
+        System.out.println("Current Database:");
+        database.forEach((predicateKey, innerMap) -> {
+            System.out.println(predicateKey + ":");
+            innerMap.forEach((instanceKey, predicate) ->
+                    System.out.println("  " + instanceKey + "=" + predicate));
+        });
     }
 
     /**
@@ -677,6 +831,14 @@ class Analyzer {
         statement.setResult(new Result(String.format("%s has been assigned to %s", secondArg.value, result)));
     }
 
+    /**
+     * Helper method to assign values if a name variable is not in the environment
+     *
+     * @param firstArg  the first argument
+     * @param secondArg the second argument
+     * @param thirdArg  the third argument
+     * @param statement the statement being analyzed
+     */
     private void assignVariableAdd(Token firstArg, Token secondArg, Token thirdArg, Statement statement) {
         // Get the value of the first and third argument
         int secondArgValue = parseArgumentValue(secondArg);
@@ -690,7 +852,7 @@ class Analyzer {
     }
 
     /**
-     * Helper method to get argument values
+     * Helper method to parse argument values
      *
      * @param argument the value of the argument to get value of
      * @return the argument value
@@ -717,6 +879,12 @@ class Analyzer {
         }
     }
 
+    /**
+     * Helper method to get argument values
+     *
+     * @param argument the value of the argument to get value of
+     * @return the argument value
+     */
     private Object getArgumentValue(Token argument) {
         if (argument.type == Token.Type.NUMBER) {
             // Directly parse and return the number
@@ -728,13 +896,14 @@ class Analyzer {
                 // If the value is an Integer or List, return it
                 if (value instanceof Integer || value instanceof List<?>) {
                     return value;
+                } else if (value instanceof String) {
+                     return getArgumentValue(new Token(Token.Type.NAME, value));
                 } else {
                     // If the value is neither an Integer nor a List, throw an error
                     throw new IllegalArgumentException("Variable '" + argument.value + "' is neither an integer nor a list");
                 }
             } else {
-                // If the variable is not found in the environment
-                throw new IllegalArgumentException("Variable '" + argument.value + "' does not exist");
+                return argument.value;
             }
         } else if (argument.type == Token.Type.LIST) {
             if (argument.value instanceof List) {
@@ -748,4 +917,47 @@ class Analyzer {
             throw new IllegalArgumentException("Invalid argument type for value retrieval.");
         }
     }
+
+    /**
+     * Helper method to get list of valid arguments
+     *
+     * @param statement the statement to get the arguments from
+     * @return list of valid arguments
+     */
+    private Token findMatchingArgument(Statement statement) {
+        // Retrieve the map of argument lists to predicates for the given predicate name.
+        HashMap<List<Token>, Predicate> argumentMap = database.get(statement.predicate);
+        // Initialize a list to hold potential placeholder values.
+        List<Object> placeholders = new ArrayList<>();
+
+        // Iterate over each set of arguments (key) associated with the predicate.
+        for (List<Token> key : argumentMap.keySet()) {
+            Token placeholderValue = null; // To store the detected placeholder token.
+            boolean potentialMatch = true; // Flag to track if the current key is a match.
+
+            // Compare each token in the argument list.
+            for (int i = 0; i < key.size(); i++) {
+                // Check for mismatching tokens.
+                if (!key.get(i).equals(statement.arguments.get(i))) {
+                    // If a mismatch is found and conditions indicate a placeholder, store it.
+                    if (placeholderValue == null && key.get(i).type == Token.Type.NAME && statement.arguments.get(i).type == Token.Type.NAME) {
+                        placeholderValue = key.get(i); // Possible placeholder found.
+                    } else {
+                        // If another mismatch is found, it's not a match; break out of the loop.
+                        potentialMatch = false;
+                        break;
+                    }
+                }
+            }
+
+            // If a potential match was found with a placeholder, add it to the placeholders list.
+            if (potentialMatch && placeholderValue != null) {
+                placeholders.add(placeholderValue.value);
+            }
+        }
+
+        // Return a new Token containing all discovered placeholder values.
+        return new Token(Token.Type.LIST, placeholders);
+    }
+
 }

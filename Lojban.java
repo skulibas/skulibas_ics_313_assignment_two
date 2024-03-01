@@ -10,9 +10,7 @@ public class Lojban {
 
     public static void main(String args[]) {
         // Create the predicate database
-        Map<String, List<List<Object>>> predicateDatabase = new HashMap<>();
-        // Create new instance of Lojban
-        Lojban lojban = new Lojban();
+        HashMap<String, HashMap<List<Token>, Predicate>> predicateDatabase = new HashMap<>();
         // Create an instance of Lexer to tokenize input
         Lexer lexer = new Lexer();
         // Create an instance of Parser to parse the tokenized input
@@ -46,6 +44,7 @@ public class Lojban {
                     System.out.println("Processed statement: " + lastStatement);
                     System.out.println("Result: " + lastStatement.result);
                     analyzer.printEnvironment();
+                    analyzer.printDatabase();
                 } catch (IllegalArgumentException e) {
                     System.err.println("Error: " + e.getMessage());
                 }
