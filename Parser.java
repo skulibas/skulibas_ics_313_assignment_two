@@ -32,7 +32,7 @@ class Parser {
             tokens.remove(0);
             // Throw an error if the first token is not an initiator or if the input is empty
         } else {
-            throw new IllegalArgumentException("Initiator parse error");
+            throw new IllegalArgumentException("Invalid input string");
         }
 
         // Iterate through all the tokens
@@ -151,12 +151,6 @@ class Parser {
         }
         // Return the list of statements
         return statements;
-    }
-
-    // Utility method to safely get the previous token from fullArguments
-    private Token getPreviousToken(List<Token> fullArguments) {
-        if (fullArguments.size() < 2) return null; // or some default token indicating no previous
-        return fullArguments.get(fullArguments.size() - 2);
     }
 
     /**

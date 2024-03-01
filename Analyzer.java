@@ -708,6 +708,7 @@ class Analyzer {
         }
         innerMap.put(listOfArgs, predicate);
         database.put((String) arg1.value, innerMap);
+        statement.setResult(new Result(String.format("%s has been created as a new predicate", statement.arguments.get(0))));
     }
 
     /**
@@ -959,5 +960,4 @@ class Analyzer {
         // Return a new Token containing all discovered placeholder values.
         return new Token(Token.Type.LIST, placeholders);
     }
-
 }
