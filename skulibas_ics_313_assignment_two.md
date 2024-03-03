@@ -1,3 +1,10 @@
+## How to run my code
+1. Open IntelliJ
+2. Choose Java as the language
+3. Choose JDK 16
+4. Move the contents of skulibas_ics_313_assignment_two directory into src root
+5. Now run the Lojban.java file
+
 ## Lojban.class Explanation
 
 The `Lojban` class is the main for the assignments interpreter. This class is responsible for initializing the core components of the interpreter, managing the input loop, and processing each input line.
